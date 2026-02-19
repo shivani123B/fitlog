@@ -1,49 +1,45 @@
 import { useState, useEffect } from "react";
-import UserPanel from "./components/UserPanel";
-import LogForm from "./components/LogForm";
-import LogsTable from "./components/LogsTable";
-import SummaryCards from "./components/SummaryCards";
-import WeightChart from "./components/WeightChart";
+import { ThemeProvider }       from "./context/ThemeContext";
+import { AccentProvider }      from "./context/AccentContext";
+import MainLayout              from "./layouts/MainLayout";
+import Dashboard               from "./pages/Dashboard";
+import Logs                    from "./pages/Logs";
+import Settings                from "./pages/Settings";
+import CalorieIntelligence     from "./pages/CalorieIntelligence";
+import Suggestions             from "./pages/Suggestions";
+import Workouts                from "./pages/Workouts";
+import UserPanel               from "./components/UserPanel";
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
 const USERS_KEY        = "fitlog_users_v1";
 const LOGS_BY_USER_KEY = "fitlog_logs_by_user_v1";
 const ACTIVE_USER_KEY  = "fitlog_active_user_v1";
+const WORKOUTS_KEY     = "fitlog_workouts_by_user_v1";
 
 // ── Storage helpers ───────────────────────────────────────────────────────────
-function loadUsers() {
-  try { return JSON.parse(localStorage.getItem(USERS_KEY)) || []; }
-  catch { return []; }
-}
-function saveUsers(users) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
+function loadUsers()          { try { return JSON.parse(localStorage.getItem(USERS_KEY))        || []; } catch { return []; } }
+function loadAllLogs()        { try { return JSON.parse(localStorage.getItem(LOGS_BY_USER_KEY)) || {}; } catch { return {}; } }
+function loadActiveUsername() { return localStorage.getItem(ACTIVE_USER_KEY) || null; }
+function loadAllWorkouts()    { try { return JSON.parse(localStorage.getItem(WORKOUTS_KEY))     || {}; } catch { return {}; } }
 
-function loadAllLogs() {
-  try { return JSON.parse(localStorage.getItem(LOGS_BY_USER_KEY)) || {}; }
-  catch { return {}; }
+function saveUsers(u)          { localStorage.setItem(USERS_KEY,        JSON.stringify(u)); }
+function saveAllLogs(l)        { localStorage.setItem(LOGS_BY_USER_KEY, JSON.stringify(l)); }
+function saveActiveUsername(u) {
+  if (u) localStorage.setItem(ACTIVE_USER_KEY, u);
+  else   localStorage.removeItem(ACTIVE_USER_KEY);
 }
-function saveAllLogs(allLogs) {
-  localStorage.setItem(LOGS_BY_USER_KEY, JSON.stringify(allLogs));
-}
-
-function loadActiveUsername() {
-  return localStorage.getItem(ACTIVE_USER_KEY) || null;
-}
-function saveActiveUsername(username) {
-  if (username) localStorage.setItem(ACTIVE_USER_KEY, username);
-  else          localStorage.removeItem(ACTIVE_USER_KEY);
-}
+function saveAllWorkouts(w)    { localStorage.setItem(WORKOUTS_KEY, JSON.stringify(w)); }
 
 // ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
   const [users,          setUsers]          = useState(() => loadUsers());
   const [allLogs,        setAllLogs]        = useState(() => loadAllLogs());
+  const [allWorkouts,    setAllWorkouts]    = useState(() => loadAllWorkouts());
   const [activeUsername, setActiveUsername] = useState(() => loadActiveUsername());
   const [editingLog,     setEditingLog]     = useState(null);
-  const [sortOrder,      setSortOrder]      = useState("newest");
+  const [page,           setPage]           = useState("dashboard");
 
-  // If the stored active username no longer exists in the users array, clear it.
+  // Clear stale active username if the referenced user was deleted.
   useEffect(() => {
     if (activeUsername && !users.find((u) => u.username === activeUsername)) {
       setActiveUsername(null);
@@ -51,185 +47,209 @@ export default function App() {
     }
   }, [users, activeUsername]);
 
-  // Logs for the active user (empty array when no user is selected)
-  const logs = activeUsername ? (allLogs[activeUsername] || []) : [];
+  const activeUser = users.find((u) => u.username === activeUsername) || null;
+  const logs       = activeUser ? (allLogs[activeUsername]     || []) : [];
+  // workouts: { "YYYY-MM-DD": [{ id, workoutName, category, durationMin, met, caloriesBurned }] }
+  const workouts   = activeUser ? (allWorkouts[activeUsername] || {}) : {};
 
-  // ── User handlers ────────────────────────────────────────────────────────
+  // ── User handlers ──────────────────────────────────────────────────────────
   function handleCreateUser(newUser) {
-    const updatedUsers = [...users, newUser];
-    setUsers(updatedUsers);
-    saveUsers(updatedUsers);
-
-    // Initialize an empty log list for the new user
+    const updatedUsers   = [...users, newUser];
     const updatedAllLogs = { ...allLogs, [newUser.username]: [] };
-    setAllLogs(updatedAllLogs);
-    saveAllLogs(updatedAllLogs);
-
-    // Auto-switch to the newly created user
-    setActiveUsername(newUser.username);
-    saveActiveUsername(newUser.username);
+    setUsers(updatedUsers);     saveUsers(updatedUsers);
+    setAllLogs(updatedAllLogs); saveAllLogs(updatedAllLogs);
+    setActiveUsername(newUser.username); saveActiveUsername(newUser.username);
     setEditingLog(null);
+    setPage("dashboard");
   }
 
   function handleSelectUser(username) {
-    setActiveUsername(username);
-    saveActiveUsername(username);
+    setActiveUsername(username); saveActiveUsername(username);
     setEditingLog(null);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setPage("dashboard");
   }
 
-  // ── Log handlers (all scoped to activeUsername) ──────────────────────────
+  function handleUpdateUser(updatedProfile) {
+    const updatedUsers = users.map((u) =>
+      u.username === activeUsername ? { ...u, profile: updatedProfile } : u
+    );
+    setUsers(updatedUsers);
+    saveUsers(updatedUsers);
+  }
+
+  function handleSwitchUser() {
+    setActiveUsername(null);
+    saveActiveUsername(null);
+    setEditingLog(null);
+  }
+
+  // ── Log handlers ───────────────────────────────────────────────────────────
   function handleSave(newLog) {
     const existing = logs.find((l) => l.date === newLog.date);
-
     if (existing && !editingLog) {
       if (!window.confirm(`A log for ${newLog.date} already exists. Overwrite it?`)) return;
     }
-
-    const updated = existing
+    const updated    = existing
       ? logs.map((l) => (l.date === newLog.date ? newLog : l))
       : [...logs, newLog];
-
     const newAllLogs = { ...allLogs, [activeUsername]: updated };
-    setAllLogs(newAllLogs);
-    saveAllLogs(newAllLogs);
+    setAllLogs(newAllLogs); saveAllLogs(newAllLogs);
     setEditingLog(null);
   }
 
   function handleEdit(log) {
     setEditingLog(log);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setPage("logs");
   }
 
-  function handleCancelEdit() {
-    setEditingLog(null);
-  }
+  function handleCancelEdit() { setEditingLog(null); }
 
   function handleDelete(date) {
     if (!window.confirm(`Delete the log for ${date}?`)) return;
-    const updated = logs.filter((l) => l.date !== date);
+    const updated    = logs.filter((l) => l.date !== date);
     const newAllLogs = { ...allLogs, [activeUsername]: updated };
-    setAllLogs(newAllLogs);
-    saveAllLogs(newAllLogs);
+    setAllLogs(newAllLogs); saveAllLogs(newAllLogs);
     if (editingLog?.date === date) setEditingLog(null);
   }
 
-  function handleReset() {
-    if (!window.confirm(`Delete ALL logs for "${activeUsername}"? This cannot be undone.`)) return;
-    const newAllLogs = { ...allLogs, [activeUsername]: [] };
-    setAllLogs(newAllLogs);
-    saveAllLogs(newAllLogs);
-    setEditingLog(null);
+  // ── Workout handlers ────────────────────────────────────────────────────────
+
+  // Add a single workout entry to the correct date bucket.
+  function handleSaveWorkout(entry) {
+    // entry: { id, date, workoutName, category, durationMin, met, caloriesBurned }
+    const userWorkouts = allWorkouts[activeUsername] || {};
+    const dayEntries   = userWorkouts[entry.date]   || [];
+    const updated = {
+      ...allWorkouts,
+      [activeUsername]: {
+        ...userWorkouts,
+        [entry.date]: [...dayEntries, entry],
+      },
+    };
+    setAllWorkouts(updated);
+    saveAllWorkouts(updated);
   }
 
-  function toggleSortOrder() {
-    setSortOrder((prev) => (prev === "newest" ? "oldest" : "newest"));
+  // Remove a single workout entry by date + id.
+  function handleDeleteWorkout(date, id) {
+    const userWorkouts = { ...(allWorkouts[activeUsername] || {}) };
+    const dayEntries   = (userWorkouts[date] || []).filter((e) => e.id !== id);
+    if (dayEntries.length === 0) {
+      delete userWorkouts[date]; // clean up empty date keys
+    } else {
+      userWorkouts[date] = dayEntries;
+    }
+    const updated = { ...allWorkouts, [activeUsername]: userWorkouts };
+    setAllWorkouts(updated);
+    saveAllWorkouts(updated);
   }
 
-  const hasActiveUser = !!activeUsername;
+  function handleImportData({ logs: importedLogs, workouts: importedWorkouts, profile: importedProfile }) {
+    const newAllLogs = { ...allLogs, [activeUsername]: importedLogs };
+    setAllLogs(newAllLogs); saveAllLogs(newAllLogs);
+    const newAllWorkouts = { ...allWorkouts, [activeUsername]: importedWorkouts };
+    setAllWorkouts(newAllWorkouts); saveAllWorkouts(newAllWorkouts);
+    if (importedProfile) {
+      const updatedUsers = users.map((u) =>
+        u.username === activeUsername ? { ...u, profile: importedProfile } : u
+      );
+      setUsers(updatedUsers); saveUsers(updatedUsers);
+    }
+  }
 
-  return (
-    <div
-      style={{
-        maxWidth: 1100,
-        margin: "0 auto",
-        padding: "24px 16px",
-        fontFamily: "system-ui, Arial, sans-serif",
-        color: "#1a1a1a",
-      }}
-    >
-      {/* ── Header ── */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          flexWrap: "wrap",
-          gap: 8,
-        }}
-      >
-        <div>
-          <h1 style={{ margin: 0, fontSize: 28, color: "#1a1a2e" }}>FitLog</h1>
-          <p style={{ margin: "4px 0 0", color: "#666", fontSize: 14 }}>
-            Diet · Macros · Weight · Steps tracker
-          </p>
-        </div>
+  // ── Pre-login screen ───────────────────────────────────────────────────────
+  if (!activeUser) {
+    return (
+      <ThemeProvider>
+        {/* AccentProvider with no activeUser → keeps default indigo accent */}
+        <AccentProvider activeUser={null}>
+          <div className="login-screen">
+            <div className="login-container">
+              <div className="login-brand">
+                <div className="login-brand-name">🏋️ FitLog</div>
+                <div className="login-brand-sub">Diet · Macros · Weight · Steps</div>
+              </div>
+              <UserPanel
+                users={users}
+                activeUsername={activeUsername}
+                onCreateUser={handleCreateUser}
+                onSelectUser={handleSelectUser}
+              />
+            </div>
+          </div>
+        </AccentProvider>
+      </ThemeProvider>
+    );
+  }
 
-        {/* Reset is only visible when a user is active */}
-        {hasActiveUser && (
-          <button
-            onClick={handleReset}
-            style={{
-              padding: "8px 14px",
-              background: "white",
-              color: "#c62828",
-              border: "1px solid #c62828",
-              borderRadius: 6,
-              cursor: "pointer",
-              fontSize: 13,
-            }}
-          >
-            Reset data
-          </button>
-        )}
-      </div>
-
-      <hr style={{ margin: "16px 0", borderColor: "#eee" }} />
-
-      {/* ── User panel (always visible) ── */}
-      <UserPanel
-        users={users}
-        activeUsername={activeUsername}
-        onCreateUser={handleCreateUser}
-        onSelectUser={handleSelectUser}
-      />
-
-      {/* ── Guard: require an active user ── */}
-      {!hasActiveUser ? (
-        <div
-          style={{
-            margin: "40px 0",
-            textAlign: "center",
-            color: "#999",
-            fontSize: 15,
-          }}
-        >
-          Select or create a user to start logging.
-        </div>
-      ) : (
-        <>
-          <hr style={{ margin: "24px 0", borderColor: "#eee" }} />
-
-          {/* Log form */}
-          <LogForm
+  // ── Logged-in layout ───────────────────────────────────────────────────────
+  function renderPage() {
+    switch (page) {
+      case "dashboard":
+        return <Dashboard logs={logs} activeUser={activeUser} workouts={workouts} />;
+      case "logs":
+        return (
+          <Logs
+            logs={logs}
             editingLog={editingLog}
             onSave={handleSave}
-            onCancel={handleCancelEdit}
-          />
-
-          <hr style={{ margin: "28px 0", borderColor: "#eee" }} />
-
-          {/* Summary cards */}
-          <SummaryCards logs={logs} />
-
-          <hr style={{ margin: "28px 0", borderColor: "#eee" }} />
-
-          {/* Weight chart */}
-          <h2 style={{ margin: "0 0 12px" }}>Weight Progress</h2>
-          <WeightChart logs={logs} />
-
-          <hr style={{ margin: "28px 0", borderColor: "#eee" }} />
-
-          {/* Logs table */}
-          <LogsTable
-            logs={logs}
-            sortOrder={sortOrder}
-            onToggleSort={toggleSortOrder}
             onEdit={handleEdit}
             onDelete={handleDelete}
+            onCancel={handleCancelEdit}
           />
-        </>
-      )}
-    </div>
+        );
+      case "calorie-intelligence":
+        return (
+          <CalorieIntelligence
+            logs={logs}
+            activeUser={activeUser}
+            onUpdateUser={handleUpdateUser}
+            workouts={workouts}
+          />
+        );
+      case "suggestions":
+        return (
+          <Suggestions
+            logs={logs}
+            activeUser={activeUser}
+            workouts={workouts}
+            onSaveLog={handleSave}
+          />
+        );
+      case "workouts":
+        return (
+          <Workouts
+            workouts={workouts}
+            activeUser={activeUser}
+            onSaveWorkout={handleSaveWorkout}
+            onDeleteWorkout={handleDeleteWorkout}
+          />
+        );
+      case "settings":
+        return (
+          <Settings
+            activeUser={activeUser}
+            onUpdateUser={handleUpdateUser}
+            onSwitchUser={handleSwitchUser}
+            logs={logs}
+            workouts={workouts}
+            onImportData={handleImportData}
+          />
+        );
+      default:
+        return <Dashboard logs={logs} activeUser={activeUser} />;
+    }
+  }
+
+  return (
+    <ThemeProvider>
+      {/* AccentProvider reads activeUser.profile.gender and sets CSS vars on
+          <body> so accent colors cascade to all children automatically. */}
+      <AccentProvider activeUser={activeUser}>
+        <MainLayout page={page} setPage={setPage} activeUser={activeUser}>
+          {renderPage()}
+        </MainLayout>
+      </AccentProvider>
+    </ThemeProvider>
   );
 }

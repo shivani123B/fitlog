@@ -7,22 +7,43 @@ function round1(n) {
   return Math.round((Number(n) || 0) * 10) / 10;
 }
 
-// Convert an old string item (pre-meal-tracking) or a partial object into the
-// full FoodItem shape so MealSection always receives consistent data.
+const ZERO_COMPUTED = { calories: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 };
+
+// Converts any item shape into the current FoodItem format.
+// Handles three cases:
+//   1. Old string  (pre-meal-tracking era)
+//   2. Old object  (has `query` field, no `mode` — from previous meal feature iteration)
+//   3. Current object (has `mode` field) — ensure computed exists
 function normalizeItem(item) {
   if (typeof item === "string") {
     return {
-      id: Math.random().toString(36).slice(2),
-      query: item,
-      grams: 0,
+      id:       Math.random().toString(36).slice(2),
+      mode:     "manual",
+      name:     item,
+      grams:    0,
       selected: null,
-      computed: { calories: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 },
+      manual:   null,
+      computed: ZERO_COMPUTED,
     };
   }
-  // Ensure computed exists (guard against partially-migrated data)
+
+  // Old object format (has `query` but no `mode`)
+  if (item.mode === undefined && item.query !== undefined) {
+    return {
+      id:       item.id || Math.random().toString(36).slice(2),
+      mode:     item.selected ? "off" : "manual",
+      name:     item.selected ? (item.selected.name || item.query) : item.query,
+      grams:    item.grams || 0,
+      selected: item.selected || null,
+      manual:   null,
+      computed: item.computed || ZERO_COMPUTED,
+    };
+  }
+
+  // Current format — just ensure computed exists
   return {
     ...item,
-    computed: item.computed || { calories: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 },
+    computed: item.computed || ZERO_COMPUTED,
   };
 }
 
@@ -156,7 +177,7 @@ export default function LogForm({ editingLog, onSave, onCancel }) {
     padding: "6px 8px",
     width: 110,
     boxSizing: "border-box",
-    border: "1px solid #ccc",
+    border: "1px solid var(--border)",
     borderRadius: 4,
     fontSize: 14,
   };
@@ -166,7 +187,7 @@ export default function LogForm({ editingLog, onSave, onCancel }) {
     flexDirection: "column",
     gap: 4,
     fontSize: 13,
-    color: "#444",
+    color: "var(--text-secondary)",
   };
 
   // Macro input values: computed when autoFill ON, user-typed when OFF.
@@ -174,11 +195,8 @@ export default function LogForm({ editingLog, onSave, onCancel }) {
     autoFill ? (hasMealMacros ? String(dayTotals[key] ?? "") : "") : form[key];
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      style={{ background: "#f8f9fa", padding: 16, borderRadius: 8, border: "1px solid #ddd" }}
-    >
-      <h2 style={{ margin: "0 0 14px", fontSize: 18 }}>
+    <form onSubmit={handleSubmit}>
+      <h2 style={{ margin: "0 0 14px", fontSize: 18, color: "var(--text-primary)" }}>
         {isEditing ? `Editing log for ${editingLog.date}` : "Add Log"}
       </h2>
 
@@ -193,7 +211,11 @@ export default function LogForm({ editingLog, onSave, onCancel }) {
             onChange={handleChange}
             required
             disabled={isEditing}
-            style={{ ...inputStyle, background: isEditing ? "#e9ecef" : "white" }}
+            style={{
+              ...inputStyle,
+              background: isEditing ? "var(--bg-secondary)" : "var(--bg-input)",
+              opacity: isEditing ? 0.7 : 1,
+            }}
           />
         </label>
 
@@ -228,8 +250,8 @@ export default function LogForm({ editingLog, onSave, onCancel }) {
       {/* ── Macro fields + auto-fill toggle ── */}
       <div
         style={{
-          background: autoFill ? "#f0f9ff" : "white",
-          border: "1px solid #d0e8f8",
+          background: autoFill ? "var(--accent-light)" : "var(--bg-secondary)",
+          border: "1px solid var(--border)",
           borderRadius: 6,
           padding: "12px 14px",
           marginBottom: 20,
@@ -237,7 +259,7 @@ export default function LogForm({ editingLog, onSave, onCancel }) {
       >
         {/* Toggle row */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer", color: "var(--text-primary)" }}>
             <input
               type="checkbox"
               checked={autoFill}
@@ -247,7 +269,7 @@ export default function LogForm({ editingLog, onSave, onCancel }) {
             <strong>Auto-fill macros from meals</strong>
           </label>
           {autoFill && (
-            <span style={{ fontSize: 12, color: "#1976d2" }}>
+            <span style={{ fontSize: 12, color: "var(--accent)" }}>
               {hasMealMacros
                 ? `Day total: ${dayTotals.calories} kcal · P:${dayTotals.proteinG}g · C:${dayTotals.carbsG}g · F:${dayTotals.fatG}g · Fiber:${dayTotals.fiberG}g`
                 : "Add foods in Meals to compute totals automatically"}
@@ -276,8 +298,8 @@ export default function LogForm({ editingLog, onSave, onCancel }) {
                 placeholder={autoFill ? "—" : placeholder}
                 style={{
                   ...inputStyle,
-                  background: autoFill ? "#e8f4ff" : "white",
-                  color: autoFill ? "#1565c0" : "inherit",
+                  background: autoFill ? "var(--accent-light)" : "var(--bg-input)",
+                  color: autoFill ? "var(--accent)" : "var(--text-primary)",
                   cursor: autoFill ? "default" : "text",
                 }}
               />
@@ -288,7 +310,7 @@ export default function LogForm({ editingLog, onSave, onCancel }) {
 
       {/* ── Meals ── */}
       <div style={{ marginBottom: 16 }}>
-        <h3 style={{ margin: "0 0 10px", fontSize: 15, color: "#333" }}>Meals</h3>
+        <h3 style={{ margin: "0 0 10px", fontSize: 15, color: "var(--text-secondary)", fontWeight: 600 }}>Meals</h3>
         {["breakfast", "lunch", "dinner", "snacks"].map((key) => (
           <MealSection
             key={key}
@@ -310,7 +332,7 @@ export default function LogForm({ editingLog, onSave, onCancel }) {
             rows={2}
             style={{
               padding: "7px 9px",
-              border: "1px solid #ccc",
+              border: "1px solid var(--border)",
               borderRadius: 4,
               fontSize: 14,
               resize: "vertical",
@@ -324,36 +346,12 @@ export default function LogForm({ editingLog, onSave, onCancel }) {
 
       {/* ── Submit / Cancel ── */}
       <div style={{ display: "flex", gap: 8 }}>
-        <button
-          type="submit"
-          style={{
-            padding: "8px 22px",
-            background: "#4CAF50",
-            color: "white",
-            border: "none",
-            borderRadius: 6,
-            cursor: "pointer",
-            fontSize: 14,
-            fontWeight: 500,
-          }}
-        >
+        <button type="submit" className="btn-primary">
           {isEditing ? "Update" : "Add"}
         </button>
 
         {isEditing && (
-          <button
-            type="button"
-            onClick={onCancel}
-            style={{
-              padding: "8px 14px",
-              background: "#888",
-              color: "white",
-              border: "none",
-              borderRadius: 6,
-              cursor: "pointer",
-              fontSize: 14,
-            }}
-          >
+          <button type="button" className="btn-secondary" onClick={onCancel}>
             Cancel
           </button>
         )}

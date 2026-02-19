@@ -30,6 +30,7 @@ const EMPTY_FORM = {
   heightCm: "",
   weightKg: "",
   gender: "",
+  dietCategory: "",
 };
 
 export default function UserPanel({ users, activeUsername, onCreateUser, onSelectUser }) {
@@ -56,11 +57,12 @@ export default function UserPanel({ users, activeUsername, onCreateUser, onSelec
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       username,
       profile: {
-        name: form.name.trim(),
-        age: Number(form.age),
-        heightCm: form.heightCm !== "" ? Number(form.heightCm) : null,
-        weightKg: form.weightKg !== "" ? Number(form.weightKg) : null,
-        gender: form.gender,
+        name:         form.name.trim(),
+        age:          Number(form.age),
+        heightCm:     form.heightCm     !== "" ? Number(form.heightCm)     : null,
+        weightKg:     form.weightKg     !== "" ? Number(form.weightKg)     : null,
+        gender:       form.gender,
+        dietCategory: form.dietCategory || null,
       },
       createdAt: new Date().toISOString(),
     };
@@ -90,7 +92,7 @@ export default function UserPanel({ users, activeUsername, onCreateUser, onSelec
   // ---- Shared styles ----
   const inputStyle = {
     padding: "7px 9px",
-    border: "1px solid #ccc",
+    border: "1px solid var(--border)",
     borderRadius: 4,
     fontSize: 14,
     width: "100%",
@@ -102,12 +104,12 @@ export default function UserPanel({ users, activeUsername, onCreateUser, onSelec
     flexDirection: "column",
     gap: 4,
     fontSize: 13,
-    color: "#444",
+    color: "var(--text-secondary)",
   };
 
   const panelStyle = {
-    background: "#fff",
-    border: "1px solid #ddd",
+    background: "var(--bg-card)",
+    border: "1px solid var(--border)",
     borderRadius: 8,
     padding: 16,
     flex: "1 1 300px",
@@ -119,8 +121,8 @@ export default function UserPanel({ users, activeUsername, onCreateUser, onSelec
       {activeUser && (
         <div
           style={{
-            background: "#e8f5e9",
-            border: "1px solid #a5d6a7",
+            background: "var(--accent-light)",
+            border: "1px solid var(--border)",
             borderRadius: 8,
             padding: "10px 14px",
             marginBottom: 12,
@@ -131,10 +133,10 @@ export default function UserPanel({ users, activeUsername, onCreateUser, onSelec
             gap: 8,
           }}
         >
-          <span style={{ fontSize: 14 }}>
+          <span style={{ fontSize: 14, color: "var(--text-primary)" }}>
             Active user:{" "}
             <strong style={{ fontFamily: "monospace" }}>{activeUser.username}</strong>
-            <span style={{ color: "#555", marginLeft: 6 }}>({activeUser.profile.name})</span>
+            <span style={{ color: "var(--text-secondary)", marginLeft: 6 }}>({activeUser.profile.name})</span>
           </span>
           <button
             onClick={() =>
@@ -145,7 +147,7 @@ export default function UserPanel({ users, activeUsername, onCreateUser, onSelec
             style={{
               background: "none",
               border: "none",
-              color: "#1565c0",
+              color: "var(--accent)",
               cursor: "pointer",
               fontSize: 13,
               padding: 0,
@@ -161,8 +163,8 @@ export default function UserPanel({ users, activeUsername, onCreateUser, onSelec
       {createdInfo && (
         <div
           style={{
-            background: "#fff9c4",
-            border: "1px solid #f9a825",
+            background: "var(--accent-light)",
+            border: "1px solid var(--border)",
             borderRadius: 8,
             padding: "10px 14px",
             marginBottom: 12,
@@ -172,7 +174,7 @@ export default function UserPanel({ users, activeUsername, onCreateUser, onSelec
             flexWrap: "wrap",
           }}
         >
-          <span style={{ fontSize: 14 }}>
+          <span style={{ fontSize: 14, color: "var(--text-primary)" }}>
             User created! Your username:{" "}
             <strong style={{ fontFamily: "monospace", fontSize: 15 }}>
               {createdInfo.username}
@@ -181,15 +183,11 @@ export default function UserPanel({ users, activeUsername, onCreateUser, onSelec
           </span>
           <button
             onClick={handleCopy}
+            className="btn-primary"
             style={{
               padding: "4px 12px",
               fontSize: 12,
-              background: copied ? "#4CAF50" : "#1976d2",
-              color: "white",
-              border: "none",
-              borderRadius: 4,
-              cursor: "pointer",
-              whiteSpace: "nowrap",
+              background: copied ? "#4CAF50" : "var(--accent)",
             }}
           >
             {copied ? "Copied!" : "Copy username"}
@@ -202,7 +200,7 @@ export default function UserPanel({ users, activeUsername, onCreateUser, onSelec
               border: "none",
               cursor: "pointer",
               fontSize: 18,
-              color: "#999",
+              color: "var(--text-muted)",
               lineHeight: 1,
             }}
             title="Dismiss"
@@ -225,18 +223,11 @@ export default function UserPanel({ users, activeUsername, onCreateUser, onSelec
               marginBottom: showCreateForm ? 14 : 0,
             }}
           >
-            <h3 style={{ margin: 0, fontSize: 16 }}>Create a user</h3>
+            <h3 style={{ margin: 0, fontSize: 16, color: "var(--text-primary)" }}>Create a user</h3>
             <button
               onClick={() => setShowCreateForm((v) => !v)}
-              style={{
-                padding: "6px 14px",
-                fontSize: 13,
-                background: showCreateForm ? "#757575" : "#4CAF50",
-                color: "white",
-                border: "none",
-                borderRadius: 6,
-                cursor: "pointer",
-              }}
+              className={showCreateForm ? "btn-secondary" : "btn-primary"}
+              style={{ fontSize: 13 }}
             >
               {showCreateForm ? "Cancel" : "Create a user"}
             </button>
@@ -291,6 +282,23 @@ export default function UserPanel({ users, activeUsername, onCreateUser, onSelec
                 </label>
 
                 <label style={labelStyle}>
+                  Diet Category — optional
+                  <select
+                    name="dietCategory"
+                    value={form.dietCategory}
+                    onChange={handleFormChange}
+                    style={inputStyle}
+                  >
+                    <option value="">Select…</option>
+                    <option value="Vegetarian">Vegetarian</option>
+                    <option value="Eggetarian">Eggetarian</option>
+                    <option value="Non-vegetarian">Non-vegetarian</option>
+                    <option value="Vegan">Vegan</option>
+                    <option value="Prefer not to say">Prefer not to say</option>
+                  </select>
+                </label>
+
+                <label style={labelStyle}>
                   Height (cm) — optional
                   <input
                     type="number"
@@ -320,17 +328,8 @@ export default function UserPanel({ users, activeUsername, onCreateUser, onSelec
 
                 <button
                   type="submit"
-                  style={{
-                    padding: "9px 0",
-                    background: "#4CAF50",
-                    color: "white",
-                    border: "none",
-                    borderRadius: 6,
-                    cursor: "pointer",
-                    fontSize: 14,
-                    fontWeight: 500,
-                    marginTop: 4,
-                  }}
+                  className="btn-primary"
+                  style={{ padding: "9px 0", fontSize: 14, marginTop: 4 }}
                 >
                   Create user
                 </button>
@@ -341,7 +340,7 @@ export default function UserPanel({ users, activeUsername, onCreateUser, onSelec
 
         {/* ── Section B: Already a user (search) ── */}
         <div id="user-search-section" style={panelStyle}>
-          <h3 style={{ margin: "0 0 12px", fontSize: 16 }}>Already a user?</h3>
+          <h3 style={{ margin: "0 0 12px", fontSize: 16, color: "var(--text-primary)" }}>Already a user?</h3>
 
           <input
             type="text"
@@ -353,7 +352,7 @@ export default function UserPanel({ users, activeUsername, onCreateUser, onSelec
 
           {/* Hint when no query */}
           {searchQuery.trim() === "" && (
-            <p style={{ color: "#aaa", fontSize: 12, margin: 0 }}>
+            <p style={{ color: "var(--text-muted)", fontSize: 12, margin: 0 }}>
               {users.length === 0
                 ? "No users yet. Create one to get started."
                 : `Type to search among ${users.length} user${users.length !== 1 ? "s" : ""}.`}
@@ -362,7 +361,7 @@ export default function UserPanel({ users, activeUsername, onCreateUser, onSelec
 
           {/* No results */}
           {searchQuery.trim() !== "" && searchResults.length === 0 && (
-            <p style={{ color: "#888", fontSize: 13, margin: 0 }}>No users found.</p>
+            <p style={{ color: "var(--text-secondary)", fontSize: 13, margin: 0 }}>No users found.</p>
           )}
 
           {/* Results list */}
@@ -384,21 +383,21 @@ export default function UserPanel({ users, activeUsername, onCreateUser, onSelec
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
-                      background: isActive ? "#e8f5e9" : "#f5f5f5",
+                      background: isActive ? "var(--accent-light)" : "var(--bg-secondary)",
                       marginBottom: 4,
-                      border: `1px solid ${isActive ? "#a5d6a7" : "#e0e0e0"}`,
+                      border: `1px solid ${isActive ? "var(--accent)" : "var(--border)"}`,
                     }}
                   >
                     <span>
-                      <strong style={{ fontFamily: "monospace" }}>{u.username}</strong>
-                      <span style={{ color: "#666", fontSize: 13, marginLeft: 8 }}>
+                      <strong style={{ fontFamily: "monospace", color: "var(--text-primary)" }}>{u.username}</strong>
+                      <span style={{ color: "var(--text-secondary)", fontSize: 13, marginLeft: 8 }}>
                         {u.profile.name}
                       </span>
                     </span>
                     <span
                       style={{
                         fontSize: 12,
-                        color: isActive ? "#388e3c" : "#1565c0",
+                        color: isActive ? "#388e3c" : "var(--accent)",
                         whiteSpace: "nowrap",
                       }}
                     >

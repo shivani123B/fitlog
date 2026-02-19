@@ -2,18 +2,18 @@ function Card({ label, value }) {
   return (
     <div
       style={{
-        background: "#f0f4ff",
-        border: "1px solid #c9d6f5",
+        background: "var(--accent-light)",
+        border: "1px solid var(--border)",
         borderRadius: 8,
         padding: "12px 18px",
         minWidth: 130,
         flex: "1 1 130px",
       }}
     >
-      <div style={{ fontSize: 11, color: "#666", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+      <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.5px" }}>
         {label}
       </div>
-      <div style={{ fontSize: 20, fontWeight: 700, color: "#1a1a2e" }}>{value}</div>
+      <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)" }}>{value}</div>
     </div>
   );
 }
@@ -28,12 +28,11 @@ export default function SummaryCards({ logs }) {
   const withWeight = sorted.filter((l) => l.morningWeightKg != null);
   const startWeight = withWeight.length > 0 ? withWeight[0].morningWeightKg : null;
   const latestWeight = withWeight.length > 0 ? withWeight[withWeight.length - 1].morningWeightKg : null;
-  let totalChange = null;
   let changeDisplay = "—";
   if (startWeight != null && latestWeight != null) {
-    totalChange = parseFloat((latestWeight - startWeight).toFixed(1));
+    const totalChange = parseFloat((latestWeight - startWeight).toFixed(1));
     const sign = totalChange > 0 ? "+" : "";
-    const color = totalChange < 0 ? "#2e7d32" : totalChange > 0 ? "#c62828" : "#555";
+    const color = totalChange < 0 ? "#2e7d32" : totalChange > 0 ? "#c62828" : "var(--text-secondary)";
     changeDisplay = (
       <span style={{ color }}>
         {sign}{totalChange} kg
@@ -56,7 +55,7 @@ export default function SummaryCards({ logs }) {
 
   return (
     <div>
-      <h2 style={{ margin: "0 0 10px" }}>Summary</h2>
+      <h2 style={{ margin: "0 0 10px", color: "var(--text-primary)", fontSize: 15, fontWeight: 600 }}>Summary</h2>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <Card
           label="Starting Weight"
@@ -68,15 +67,15 @@ export default function SummaryCards({ logs }) {
         />
         <div
           style={{
-            background: "#f0f4ff",
-            border: "1px solid #c9d6f5",
+            background: "var(--accent-light)",
+            border: "1px solid var(--border)",
             borderRadius: 8,
             padding: "12px 18px",
             minWidth: 130,
             flex: "1 1 130px",
           }}
         >
-          <div style={{ fontSize: 11, color: "#666", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+          <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.5px" }}>
             Total Change
           </div>
           <div style={{ fontSize: 20, fontWeight: 700 }}>{changeDisplay}</div>

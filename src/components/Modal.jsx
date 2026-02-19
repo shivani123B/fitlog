@@ -22,7 +22,7 @@ export default function Modal({ isOpen, onClose, title, children }) {
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.45)",
+        background: "rgba(0,0,0,0.55)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -34,14 +34,15 @@ export default function Modal({ isOpen, onClose, title, children }) {
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: "white",
-          borderRadius: 10,
+          background: "var(--bg-card)",
+          border: "1px solid var(--border)",
+          borderRadius: 12,
           padding: 24,
           width: "100%",
           maxWidth: 560,
           maxHeight: "85vh",
           overflowY: "auto",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+          boxShadow: "var(--shadow-lg)",
         }}
       >
         {/* Header row */}
@@ -53,7 +54,7 @@ export default function Modal({ isOpen, onClose, title, children }) {
             marginBottom: 18,
           }}
         >
-          <h2 style={{ margin: 0, fontSize: 18, color: "#1a1a2e" }}>{title}</h2>
+          <h2 style={{ margin: 0, fontSize: 18, color: "var(--text-primary)" }}>{title}</h2>
           <button
             onClick={onClose}
             style={{
@@ -61,7 +62,7 @@ export default function Modal({ isOpen, onClose, title, children }) {
               border: "none",
               fontSize: 22,
               cursor: "pointer",
-              color: "#999",
+              color: "var(--text-muted)",
               lineHeight: 1,
               padding: "0 2px",
             }}

@@ -7,14 +7,30 @@ function round1(n) {
   return Math.round((Number(n) || 0) * 10) / 10;
 }
 
-// Handles both old string items and new FoodItem objects.
+// Handles string items, old object items (query/no mode), and new items (mode field).
 function getItemDisplay(item) {
-  if (typeof item === "string") return { name: item, grams: null, macros: null };
+  if (typeof item === "string") {
+    return { name: item, grams: null, brand: null, macros: null, mode: null };
+  }
+  if (item.mode !== undefined) {
+    const hasMacros = item.computed &&
+      (item.computed.calories > 0 || item.computed.proteinG > 0 ||
+       item.computed.carbsG > 0   || item.computed.fatG > 0);
+    return {
+      name:   item.name || "Unknown item",
+      brand:  item.selected?.brand || null,
+      grams:  item.grams > 0 ? item.grams : null,
+      macros: hasMacros ? item.computed : null,
+      mode:   item.mode,
+    };
+  }
+  // Old object format (has `query`, no `mode`)
   return {
-    name:   item.selected ? item.selected.name : item.query,
+    name:   item.selected ? (item.selected.name || item.query) : item.query,
     brand:  item.selected?.brand || null,
     grams:  item.grams > 0 ? item.grams : null,
-    macros: item.selected && item.computed ? item.computed : null,
+    macros: item.computed?.calories > 0 ? item.computed : null,
+    mode:   item.selected ? "off" : "manual",
   };
 }
 
@@ -43,15 +59,15 @@ function MacroBadge({ label, value }) {
   return (
     <div
       style={{
-        background: "#f0f4ff",
-        border: "1px solid #c9d6f5",
+        background: "var(--accent-light)",
+        border: "1px solid var(--border)",
         borderRadius: 6,
         padding: "5px 10px",
         fontSize: 13,
       }}
     >
-      <span style={{ color: "#666" }}>{label}: </span>
-      <strong>{value}</strong>
+      <span style={{ color: "var(--text-secondary)" }}>{label}: </span>
+      <strong style={{ color: "var(--text-primary)" }}>{value}</strong>
     </div>
   );
 }
@@ -78,7 +94,7 @@ export default function LogDetailsModal({ log, onClose }) {
           gap: 8,
           marginBottom: 18,
           paddingBottom: 14,
-          borderBottom: "1px solid #eee",
+          borderBottom: "1px solid var(--border)",
         }}
       >
         {[
@@ -106,6 +122,7 @@ export default function LogDetailsModal({ log, onClose }) {
             padding: "8px 12px",
             fontSize: 13,
             marginBottom: 18,
+            color: "#1b5e20",
           }}
         >
           <strong>Day totals from meals: </strong>
@@ -115,10 +132,10 @@ export default function LogDetailsModal({ log, onClose }) {
       )}
 
       {/* ── Meals ── */}
-      <h3 style={{ margin: "0 0 12px", fontSize: 15, color: "#333" }}>Meals</h3>
+      <h3 style={{ margin: "0 0 12px", fontSize: 15, color: "var(--text-primary)" }}>Meals</h3>
 
       {MEAL_KEYS.every((k) => !(meals[k]?.items?.length > 0 || meals[k]?.time)) && (
-        <p style={{ color: "#aaa", fontSize: 14, margin: "0 0 16px" }}>
+        <p style={{ color: "var(--text-muted)", fontSize: 14, margin: "0 0 16px" }}>
           No meal data recorded for this day.
         </p>
       )}
@@ -134,14 +151,14 @@ export default function LogDetailsModal({ log, onClose }) {
         return (
           <div
             key={key}
-            style={{ marginBottom: 18, paddingBottom: 14, borderBottom: "1px solid #f0f0f0" }}
+            style={{ marginBottom: 18, paddingBottom: 14, borderBottom: "1px solid var(--border)" }}
           >
             {/* Meal header */}
             <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
-              <strong style={{ fontSize: 14 }}>{MEAL_LABELS[key]}</strong>
-              {meal.time && <span style={{ fontSize: 12, color: "#888" }}>{meal.time}</span>}
+              <strong style={{ fontSize: 14, color: "var(--text-primary)" }}>{MEAL_LABELS[key]}</strong>
+              {meal.time && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{meal.time}</span>}
               {hasMealMacros && (
-                <span style={{ fontSize: 12, color: "#1976d2", marginLeft: "auto" }}>
+                <span style={{ fontSize: 12, color: "var(--accent)", marginLeft: "auto" }}>
                   {mealTotals.calories} kcal
                 </span>
               )}
@@ -149,24 +166,39 @@ export default function LogDetailsModal({ log, onClose }) {
 
             {/* Item list */}
             {items.length === 0 ? (
-              <p style={{ margin: 0, color: "#ccc", fontSize: 13 }}>No items.</p>
+              <p style={{ margin: 0, color: "var(--text-muted)", fontSize: 13 }}>No items.</p>
             ) : (
               <ul style={{ margin: "0 0 6px", paddingLeft: 20 }}>
                 {items.map((item, i) => {
                   const d = getItemDisplay(item);
                   return (
                     <li key={item.id || i} style={{ fontSize: 14, marginBottom: 4 }}>
-                      <span style={{ fontWeight: 500 }}>{d.name}</span>
+                      <span style={{ fontWeight: 500, color: "var(--text-primary)" }}>{d.name}</span>
                       {d.grams && (
-                        <span style={{ color: "#888", marginLeft: 5 }}>{d.grams} g</span>
+                        <span style={{ color: "var(--text-muted)", marginLeft: 5 }}>{d.grams} g</span>
+                      )}
+                      {d.mode === "generic" && (
+                        <span style={{ fontSize: 10, background: "#e8f5e9", color: "#2e7d32", borderRadius: 10, padding: "1px 6px", marginLeft: 6 }}>
+                          Generic
+                        </span>
+                      )}
+                      {d.mode === "off" && (
+                        <span style={{ fontSize: 10, background: "#e3f2fd", color: "#1565c0", borderRadius: 10, padding: "1px 6px", marginLeft: 6 }}>
+                          OFF
+                        </span>
+                      )}
+                      {d.mode === "manual" && (
+                        <span style={{ fontSize: 10, background: "#ede7f6", color: "#6a1b9a", borderRadius: 10, padding: "1px 6px", marginLeft: 6 }}>
+                          manual
+                        </span>
                       )}
                       {d.brand && (
-                        <span style={{ color: "#bbb", fontSize: 12, marginLeft: 5 }}>
+                        <span style={{ color: "var(--text-muted)", fontSize: 12, marginLeft: 5 }}>
                           ({d.brand})
                         </span>
                       )}
                       {d.macros && (
-                        <div style={{ fontSize: 11, color: "#666", marginTop: 1 }}>
+                        <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 1 }}>
                           {round1(d.macros.calories)} kcal · P:{round1(d.macros.proteinG)}g ·
                           C:{round1(d.macros.carbsG)}g · F:{round1(d.macros.fatG)}g ·
                           Fiber:{round1(d.macros.fiberG)}g
@@ -180,7 +212,7 @@ export default function LogDetailsModal({ log, onClose }) {
 
             {/* Meal totals row */}
             {hasMealMacros && (
-              <div style={{ fontSize: 12, color: "#444", paddingLeft: 4 }}>
+              <div style={{ fontSize: 12, color: "var(--text-primary)", paddingLeft: 4 }}>
                 <strong>Meal total: </strong>
                 {mealTotals.calories} kcal · P:{mealTotals.proteinG}g ·
                 C:{mealTotals.carbsG}g · F:{mealTotals.fatG}g · Fiber:{mealTotals.fiberG}g
@@ -193,15 +225,15 @@ export default function LogDetailsModal({ log, onClose }) {
       {/* ── Notes ── */}
       {log.notes && (
         <div style={{ marginTop: 8 }}>
-          <strong style={{ fontSize: 14 }}>Notes</strong>
+          <strong style={{ fontSize: 14, color: "var(--text-primary)" }}>Notes</strong>
           <p
             style={{
               margin: "6px 0 0",
               fontSize: 14,
-              color: "#444",
+              color: "var(--text-primary)",
               whiteSpace: "pre-wrap",
-              background: "#fafafa",
-              border: "1px solid #eee",
+              background: "var(--bg-secondary)",
+              border: "1px solid var(--border)",
               borderRadius: 6,
               padding: "8px 10px",
             }}

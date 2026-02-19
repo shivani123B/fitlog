@@ -24,26 +24,28 @@ export default function LogsTable({ logs, sortOrder, onToggleSort, onEdit, onDel
 
   const th = {
     padding: "10px 10px",
-    background: "#e9ecef",
+    background: "var(--bg-secondary)",
     fontWeight: 600,
     fontSize: 13,
     textAlign: "left",
-    borderBottom: "2px solid #dee2e6",
+    borderBottom: "2px solid var(--border)",
+    color: "var(--text-secondary)",
     whiteSpace: "nowrap",
   };
 
   const td = {
     padding: "8px 10px",
     fontSize: 14,
-    borderBottom: "1px solid #eee",
+    borderBottom: "1px solid var(--border)",
     verticalAlign: "middle",
+    color: "var(--text-primary)",
   };
 
   if (logs.length === 0) {
     return (
       <div>
-        <h2 style={{ margin: "0 0 10px" }}>Logs</h2>
-        <p style={{ color: "#888" }}>No logs yet. Add your first entry above.</p>
+        <h2 style={{ margin: "0 0 10px", fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>Logs</h2>
+        <p style={{ color: "var(--text-muted)" }}>No logs yet. Add your first entry above.</p>
       </div>
     );
   }
@@ -59,17 +61,13 @@ export default function LogsTable({ logs, sortOrder, onToggleSort, onEdit, onDel
           marginBottom: 10,
         }}
       >
-        <h2 style={{ margin: 0 }}>Logs ({logs.length})</h2>
+        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>
+          Logs ({logs.length})
+        </h2>
         <button
           onClick={onToggleSort}
-          style={{
-            padding: "6px 12px",
-            fontSize: 13,
-            border: "1px solid #ccc",
-            borderRadius: 6,
-            cursor: "pointer",
-            background: "white",
-          }}
+          className="btn-secondary"
+          style={{ fontSize: 13 }}
         >
           {sortOrder === "newest" ? "Newest first ↓" : "Oldest first ↑"}
         </button>
@@ -93,7 +91,10 @@ export default function LogsTable({ logs, sortOrder, onToggleSort, onEdit, onDel
           </thead>
           <tbody>
             {sorted.map((log, i) => (
-              <tr key={log.date} style={{ background: i % 2 === 0 ? "white" : "#fafafa" }}>
+              <tr
+                key={log.date}
+                style={{ background: i % 2 === 0 ? "var(--bg-card)" : "var(--bg-secondary)" }}
+              >
                 <td style={{ ...td, fontWeight: 500 }}>{log.date}</td>
                 <td style={td}>{log.morningWeightKg ?? "—"}</td>
                 <td style={td}>{log.calories ?? "—"}</td>
@@ -109,7 +110,7 @@ export default function LogsTable({ logs, sortOrder, onToggleSort, onEdit, onDel
                     ...td,
                     fontFamily: "monospace",
                     fontSize: 12,
-                    color: mealSummary(log) === "—" ? "#bbb" : "#333",
+                    color: mealSummary(log) === "—" ? "var(--text-muted)" : "var(--text-primary)",
                   }}
                 >
                   {mealSummary(log)}
@@ -119,45 +120,22 @@ export default function LogsTable({ logs, sortOrder, onToggleSort, onEdit, onDel
                 <td style={{ ...td, whiteSpace: "nowrap" }}>
                   <button
                     onClick={() => setViewingLog(log)}
-                    style={{
-                      marginRight: 4,
-                      padding: "4px 9px",
-                      fontSize: 12,
-                      background: "#607d8b",
-                      color: "white",
-                      border: "none",
-                      borderRadius: 4,
-                      cursor: "pointer",
-                    }}
+                    className="btn-secondary"
+                    style={{ marginRight: 4, padding: "4px 9px", fontSize: 12 }}
                   >
                     View
                   </button>
                   <button
                     onClick={() => onEdit(log)}
-                    style={{
-                      marginRight: 4,
-                      padding: "4px 10px",
-                      fontSize: 12,
-                      background: "#2196F3",
-                      color: "white",
-                      border: "none",
-                      borderRadius: 4,
-                      cursor: "pointer",
-                    }}
+                    className="btn-primary"
+                    style={{ marginRight: 4, padding: "4px 10px", fontSize: 12 }}
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => onDelete(log.date)}
-                    style={{
-                      padding: "4px 10px",
-                      fontSize: 12,
-                      background: "#f44336",
-                      color: "white",
-                      border: "none",
-                      borderRadius: 4,
-                      cursor: "pointer",
-                    }}
+                    className="btn-danger"
+                    style={{ padding: "4px 10px", fontSize: 12 }}
                   >
                     Delete
                   </button>

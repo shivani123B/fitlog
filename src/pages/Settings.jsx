@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { useTheme } from "../context/ThemeContext";
+import * as api from "../utils/api";
 
 function ToggleSwitch({ checked, onChange }) {
   return (
@@ -90,21 +91,19 @@ export default function Settings({ activeUser, onUpdateUser, onSwitchUser, logs 
   }
 
   // ── Export data ──────────────────────────────────────────────────────────
-  function handleExport() {
-    const data = {
-      version:    1,
-      exportedAt: new Date().toISOString(),
-      user:       activeUser,
-      logs,
-      workouts,
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href     = url;
-    a.download = `fitlog_${activeUser.username}_${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  async function handleExport() {
+    try {
+      const data = await api.data.exportAll();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `fitlog_${activeUser.username}_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert("Export failed: " + err.message);
+    }
   }
 
   // ── Import data ──────────────────────────────────────────────────────────
@@ -147,9 +146,12 @@ export default function Settings({ activeUser, onUpdateUser, onSwitchUser, logs 
   // ── Danger zone ──────────────────────────────────────────────────────────
   function handleResetAll() {
     if (!window.confirm(
-      "This will permanently delete ALL users and ALL logs.\nThis cannot be undone.\n\nAre you absolutely sure?"
+      "This will log you out and clear local preferences.\nServer data will be preserved.\n\nAre you sure?"
     )) return;
-    localStorage.clear();
+    api.setToken(null);
+    localStorage.removeItem("fitlog_theme");
+    localStorage.removeItem("fitlog_autofill_default");
+    localStorage.removeItem("fitlog_sidebar_state");
     window.location.reload();
   }
 

@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ThemeProvider }       from "./context/ThemeContext";
 import { AccentProvider }      from "./context/AccentContext";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import MainLayout              from "./layouts/MainLayout";
 import Dashboard               from "./pages/Dashboard";
 import Logs                    from "./pages/Logs";
@@ -9,92 +10,143 @@ import CalorieIntelligence     from "./pages/CalorieIntelligence";
 import Suggestions             from "./pages/Suggestions";
 import Workouts                from "./pages/Workouts";
 import UserPanel               from "./components/UserPanel";
+import * as api                from "./utils/api";
 
-// ── Storage keys ──────────────────────────────────────────────────────────────
-const USERS_KEY        = "fitlog_users_v1";
-const LOGS_BY_USER_KEY = "fitlog_logs_by_user_v1";
-const ACTIVE_USER_KEY  = "fitlog_active_user_v1";
-const WORKOUTS_KEY     = "fitlog_workouts_by_user_v1";
-
-// ── Storage helpers ───────────────────────────────────────────────────────────
-function loadUsers()          { try { return JSON.parse(localStorage.getItem(USERS_KEY))        || []; } catch { return []; } }
-function loadAllLogs()        { try { return JSON.parse(localStorage.getItem(LOGS_BY_USER_KEY)) || {}; } catch { return {}; } }
-function loadActiveUsername() { return localStorage.getItem(ACTIVE_USER_KEY) || null; }
-function loadAllWorkouts()    { try { return JSON.parse(localStorage.getItem(WORKOUTS_KEY))     || {}; } catch { return {}; } }
-
-function saveUsers(u)          { localStorage.setItem(USERS_KEY,        JSON.stringify(u)); }
-function saveAllLogs(l)        { localStorage.setItem(LOGS_BY_USER_KEY, JSON.stringify(l)); }
-function saveActiveUsername(u) {
-  if (u) localStorage.setItem(ACTIVE_USER_KEY, u);
-  else   localStorage.removeItem(ACTIVE_USER_KEY);
+function normalizeLog(l) {
+  return {
+    date:            l.date,
+    morningWeightKg: l.morning_weight_kg ?? l.morningWeightKg ?? null,
+    calories:        l.calories ?? null,
+    proteinG:        l.protein_g ?? l.proteinG ?? null,
+    carbsG:          l.carbs_g ?? l.carbsG ?? null,
+    fatG:            l.fat_g ?? l.fatG ?? null,
+    fiberG:          l.fiber_g ?? l.fiberG ?? null,
+    steps:           l.steps ?? null,
+    meals:           l.meals || null,
+    notes:           l.notes || "",
+  };
 }
-function saveAllWorkouts(w)    { localStorage.setItem(WORKOUTS_KEY, JSON.stringify(w)); }
 
-// ── App ───────────────────────────────────────────────────────────────────────
-export default function App() {
-  const [users,          setUsers]          = useState(() => loadUsers());
-  const [allLogs,        setAllLogs]        = useState(() => loadAllLogs());
-  const [allWorkouts,    setAllWorkouts]    = useState(() => loadAllWorkouts());
-  const [activeUsername, setActiveUsername] = useState(() => loadActiveUsername());
-  const [editingLog,     setEditingLog]     = useState(null);
-  const [page,           setPage]           = useState("dashboard");
+function normalizeWorkout(w) {
+  return {
+    id:             w.id,
+    date:           w.date,
+    workoutName:    w.workout_name ?? w.workoutName,
+    category:       w.category,
+    durationMin:    w.duration_min ?? w.durationMin,
+    met:            w.met,
+    caloriesBurned: w.calories_burned ?? w.caloriesBurned,
+  };
+}
 
-  // Clear stale active username if the referenced user was deleted.
-  useEffect(() => {
-    if (activeUsername && !users.find((u) => u.username === activeUsername)) {
-      setActiveUsername(null);
-      saveActiveUsername(null);
+function AppInner() {
+  const { currentUser, loading, register, login, logout, refreshProfile } = useAuth();
+
+  const [logs,        setLogs]        = useState([]);
+  const [workouts,    setWorkouts]    = useState({});
+  const [editingLog,  setEditingLog]  = useState(null);
+  const [page,        setPage]        = useState("dashboard");
+  const [dataLoading, setDataLoading] = useState(false);
+
+  const activeUser = currentUser
+    ? {
+        ...currentUser,
+        username: currentUser.username,
+        profile: currentUser.profile,
+      }
+    : null;
+
+  const fetchData = useCallback(async () => {
+    if (!currentUser) return;
+    setDataLoading(true);
+    try {
+      const [logsData, workoutsData] = await Promise.all([
+        api.logs.list("desc", 1000),
+        api.workouts.list(),
+      ]);
+      setLogs(logsData.map(normalizeLog));
+
+      const grouped = {};
+      for (const w of workoutsData) {
+        const nw = normalizeWorkout(w);
+        if (!grouped[nw.date]) grouped[nw.date] = [];
+        grouped[nw.date].push(nw);
+      }
+      setWorkouts(grouped);
+    } catch (err) {
+      console.error("Failed to load data:", err);
+    } finally {
+      setDataLoading(false);
     }
-  }, [users, activeUsername]);
+  }, [currentUser]);
 
-  const activeUser = users.find((u) => u.username === activeUsername) || null;
-  const logs       = activeUser ? (allLogs[activeUsername]     || []) : [];
-  // workouts: { "YYYY-MM-DD": [{ id, workoutName, category, durationMin, met, caloriesBurned }] }
-  const workouts   = activeUser ? (allWorkouts[activeUsername] || {}) : {};
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  // ── User handlers ──────────────────────────────────────────────────────────
-  function handleCreateUser(newUser) {
-    const updatedUsers   = [...users, newUser];
-    const updatedAllLogs = { ...allLogs, [newUser.username]: [] };
-    setUsers(updatedUsers);     saveUsers(updatedUsers);
-    setAllLogs(updatedAllLogs); saveAllLogs(updatedAllLogs);
-    setActiveUsername(newUser.username); saveActiveUsername(newUser.username);
-    setEditingLog(null);
-    setPage("dashboard");
-  }
-
-  function handleSelectUser(username) {
-    setActiveUsername(username); saveActiveUsername(username);
-    setEditingLog(null);
-    setPage("dashboard");
-  }
-
-  function handleUpdateUser(updatedProfile) {
-    const updatedUsers = users.map((u) =>
-      u.username === activeUsername ? { ...u, profile: updatedProfile } : u
-    );
-    setUsers(updatedUsers);
-    saveUsers(updatedUsers);
+  async function handleUpdateUser(updatedProfile) {
+    try {
+      await api.users.update({
+        name:                     updatedProfile.name,
+        age:                      updatedProfile.age,
+        height_cm:                updatedProfile.heightCm,
+        weight_kg:                updatedProfile.weightKg,
+        gender:                   updatedProfile.gender,
+        diet_category:            updatedProfile.dietCategory,
+        goal_weight_kg:           updatedProfile.goalWeightKg,
+        weekly_active_minutes_goal: updatedProfile.weeklyActiveMinutesGoal,
+        preferred_deficit:        updatedProfile.preferredDeficit,
+      });
+      await refreshProfile();
+    } catch (err) {
+      console.error("Failed to update profile:", err);
+    }
   }
 
   function handleSwitchUser() {
-    setActiveUsername(null);
-    saveActiveUsername(null);
+    logout();
+    setLogs([]);
+    setWorkouts({});
     setEditingLog(null);
   }
 
-  // ── Log handlers ───────────────────────────────────────────────────────────
-  function handleSave(newLog) {
+  async function handleSave(newLog) {
     const existing = logs.find((l) => l.date === newLog.date);
     if (existing && !editingLog) {
       if (!window.confirm(`A log for ${newLog.date} already exists. Overwrite it?`)) return;
     }
-    const updated    = existing
-      ? logs.map((l) => (l.date === newLog.date ? newLog : l))
-      : [...logs, newLog];
-    const newAllLogs = { ...allLogs, [activeUsername]: updated };
-    setAllLogs(newAllLogs); saveAllLogs(newAllLogs);
-    setEditingLog(null);
+
+    const body = {
+      date:              newLog.date,
+      morning_weight_kg: newLog.morningWeightKg ?? null,
+      calories:          newLog.calories ?? null,
+      protein_g:         newLog.proteinG ?? null,
+      carbs_g:           newLog.carbsG ?? null,
+      fat_g:             newLog.fatG ?? null,
+      fiber_g:           newLog.fiberG ?? null,
+      steps:             newLog.steps ?? null,
+      meals:             newLog.meals || { breakfast: { time: "", items: [] }, lunch: { time: "", items: [] }, dinner: { time: "", items: [] }, snacks: { time: "", items: [] } },
+      notes:             newLog.notes || "",
+    };
+
+    try {
+      if (existing) {
+        const updated = normalizeLog(await api.logs.update(newLog.date, body));
+        setLogs(logs.map((l) => (l.date === newLog.date ? updated : l)));
+      } else {
+        const created = normalizeLog(await api.logs.create(body));
+        setLogs([created, ...logs]);
+      }
+      setEditingLog(null);
+    } catch (err) {
+      if (err.status === 409) {
+        if (window.confirm(`A log for ${newLog.date} already exists on the server. Overwrite it?`)) {
+          const updated = normalizeLog(await api.logs.update(newLog.date, body));
+          setLogs(logs.map((l) => (l.date === newLog.date ? updated : l)));
+          setEditingLog(null);
+        }
+      } else {
+        alert("Failed to save log: " + err.message);
+      }
+    }
   }
 
   function handleEdit(log) {
@@ -104,86 +156,119 @@ export default function App() {
 
   function handleCancelEdit() { setEditingLog(null); }
 
-  function handleDelete(date) {
+  async function handleDelete(date) {
     if (!window.confirm(`Delete the log for ${date}?`)) return;
-    const updated    = logs.filter((l) => l.date !== date);
-    const newAllLogs = { ...allLogs, [activeUsername]: updated };
-    setAllLogs(newAllLogs); saveAllLogs(newAllLogs);
-    if (editingLog?.date === date) setEditingLog(null);
+    try {
+      await api.logs.delete(date);
+      setLogs(logs.filter((l) => l.date !== date));
+      if (editingLog?.date === date) setEditingLog(null);
+    } catch (err) {
+      alert("Failed to delete log: " + err.message);
+    }
   }
 
-  // ── Workout handlers ────────────────────────────────────────────────────────
-
-  // Add a single workout entry to the correct date bucket.
-  function handleSaveWorkout(entry) {
-    // entry: { id, date, workoutName, category, durationMin, met, caloriesBurned }
-    const userWorkouts = allWorkouts[activeUsername] || {};
-    const dayEntries   = userWorkouts[entry.date]   || [];
-    const updated = {
-      ...allWorkouts,
-      [activeUsername]: {
-        ...userWorkouts,
-        [entry.date]: [...dayEntries, entry],
-      },
+  async function handleSaveWorkout(entry) {
+    const body = {
+      date:            entry.date,
+      workout_name:    entry.workoutName,
+      category:        entry.category,
+      duration_min:    entry.durationMin,
+      met:             entry.met,
+      calories_burned: entry.caloriesBurned,
     };
-    setAllWorkouts(updated);
-    saveAllWorkouts(updated);
-  }
-
-  // Remove a single workout entry by date + id.
-  function handleDeleteWorkout(date, id) {
-    const userWorkouts = { ...(allWorkouts[activeUsername] || {}) };
-    const dayEntries   = (userWorkouts[date] || []).filter((e) => e.id !== id);
-    if (dayEntries.length === 0) {
-      delete userWorkouts[date]; // clean up empty date keys
-    } else {
-      userWorkouts[date] = dayEntries;
-    }
-    const updated = { ...allWorkouts, [activeUsername]: userWorkouts };
-    setAllWorkouts(updated);
-    saveAllWorkouts(updated);
-  }
-
-  function handleImportData({ logs: importedLogs, workouts: importedWorkouts, profile: importedProfile }) {
-    const newAllLogs = { ...allLogs, [activeUsername]: importedLogs };
-    setAllLogs(newAllLogs); saveAllLogs(newAllLogs);
-    const newAllWorkouts = { ...allWorkouts, [activeUsername]: importedWorkouts };
-    setAllWorkouts(newAllWorkouts); saveAllWorkouts(newAllWorkouts);
-    if (importedProfile) {
-      const updatedUsers = users.map((u) =>
-        u.username === activeUsername ? { ...u, profile: importedProfile } : u
-      );
-      setUsers(updatedUsers); saveUsers(updatedUsers);
+    try {
+      const created = normalizeWorkout(await api.workouts.create(body));
+      setWorkouts((prev) => {
+        const day = prev[entry.date] || [];
+        return { ...prev, [entry.date]: [...day, created] };
+      });
+    } catch (err) {
+      alert("Failed to save workout: " + err.message);
     }
   }
 
-  // ── Pre-login screen ───────────────────────────────────────────────────────
-  if (!activeUser) {
+  async function handleDeleteWorkout(date, id) {
+    try {
+      await api.workouts.delete(id);
+      setWorkouts((prev) => {
+        const day = (prev[date] || []).filter((e) => e.id !== id);
+        const updated = { ...prev };
+        if (day.length === 0) delete updated[date];
+        else updated[date] = day;
+        return updated;
+      });
+    } catch (err) {
+      alert("Failed to delete workout: " + err.message);
+    }
+  }
+
+  async function handleImportData({ logs: importedLogs, workouts: importedWorkouts, profile: importedProfile }) {
+    try {
+      const logBodies = (importedLogs || []).map((l) => ({
+        date:              l.date,
+        morning_weight_kg: l.morningWeightKg ?? null,
+        calories:          l.calories ?? null,
+        protein_g:         l.proteinG ?? null,
+        carbs_g:           l.carbsG ?? null,
+        fat_g:             l.fatG ?? null,
+        fiber_g:           l.fiberG ?? null,
+        steps:             l.steps ?? null,
+        meals:             l.meals || { breakfast: { time: "", items: [] }, lunch: { time: "", items: [] }, dinner: { time: "", items: [] }, snacks: { time: "", items: [] } },
+        notes:             l.notes || "",
+      }));
+
+      const flatWorkouts = [];
+      if (importedWorkouts && typeof importedWorkouts === "object") {
+        for (const [date, entries] of Object.entries(importedWorkouts)) {
+          for (const w of entries) {
+            flatWorkouts.push({
+              date:            date,
+              workout_name:    w.workoutName || w.workout_name,
+              category:        w.category,
+              duration_min:    w.durationMin || w.duration_min,
+              met:             w.met,
+              calories_burned: w.caloriesBurned || w.calories_burned,
+            });
+          }
+        }
+      }
+
+      await api.data.importAll({ version: 1, logs: logBodies, workouts: flatWorkouts });
+      if (importedProfile) await handleUpdateUser(importedProfile);
+      await fetchData();
+    } catch (err) {
+      alert("Import failed: " + err.message);
+    }
+  }
+
+  if (loading) {
     return (
-      <ThemeProvider>
-        {/* AccentProvider with no activeUser → keeps default indigo accent */}
-        <AccentProvider activeUser={null}>
-          <div className="login-screen">
-            <div className="login-container">
-              <div className="login-brand">
-                <div className="login-brand-name">🏋️ FitLog</div>
-                <div className="login-brand-sub">Diet · Macros · Weight · Steps</div>
-              </div>
-              <UserPanel
-                users={users}
-                activeUsername={activeUsername}
-                onCreateUser={handleCreateUser}
-                onSelectUser={handleSelectUser}
-              />
-            </div>
-          </div>
-        </AccentProvider>
-      </ThemeProvider>
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" }}>
+        <p style={{ color: "var(--text-secondary)" }}>Loading...</p>
+      </div>
     );
   }
 
-  // ── Logged-in layout ───────────────────────────────────────────────────────
+  if (!activeUser) {
+    return (
+      <AccentProvider activeUser={null}>
+        <div className="login-screen">
+          <div className="login-container">
+            <div className="login-brand">
+              <div className="login-brand-name">🏋️ FitLog</div>
+              <div className="login-brand-sub">Diet · Macros · Weight · Steps</div>
+            </div>
+            <UserPanel onRegister={register} onLogin={login} />
+          </div>
+        </div>
+      </AccentProvider>
+    );
+  }
+
   function renderPage() {
+    if (dataLoading && logs.length === 0) {
+      return <div style={{ padding: 40, textAlign: "center", color: "var(--text-secondary)" }}>Loading data...</div>;
+    }
     switch (page) {
       case "dashboard":
         return <Dashboard logs={logs} activeUser={activeUser} workouts={workouts} />;
@@ -237,19 +322,25 @@ export default function App() {
           />
         );
       default:
-        return <Dashboard logs={logs} activeUser={activeUser} />;
+        return <Dashboard logs={logs} activeUser={activeUser} workouts={workouts} />;
     }
   }
 
   return (
+    <AccentProvider activeUser={activeUser}>
+      <MainLayout page={page} setPage={setPage} activeUser={activeUser}>
+        {renderPage()}
+      </MainLayout>
+    </AccentProvider>
+  );
+}
+
+export default function App() {
+  return (
     <ThemeProvider>
-      {/* AccentProvider reads activeUser.profile.gender and sets CSS vars on
-          <body> so accent colors cascade to all children automatically. */}
-      <AccentProvider activeUser={activeUser}>
-        <MainLayout page={page} setPage={setPage} activeUser={activeUser}>
-          {renderPage()}
-        </MainLayout>
-      </AccentProvider>
+      <AuthProvider>
+        <AppInner />
+      </AuthProvider>
     </ThemeProvider>
   );
 }

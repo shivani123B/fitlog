@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { FOOD_LIBRARY, filterByDiet } from "../utils/foodLibrary";
+import { calorieIntel as calorieIntelApi } from "../utils/api";
 
 // ── BMR formula (Mifflin-St Jeor) ────────────────────────────────────────────
 function calcBMR(weightKg, heightCm, age, gender) {
@@ -117,15 +118,26 @@ function MealCard({ slot, data }) {
 export default function Suggestions({ logs, activeUser, workouts = {}, onSaveLog }) {
   const [seed,     setSeed]     = useState(0);
   const [copyDone, setCopyDone] = useState(false);
+  const [savedInputs, setSavedInputs] = useState(null);
 
   const profile = activeUser.profile || {};
 
-  // Read CalorieIntelligence saved inputs; fall back to raw profile values
-  const savedInputs = (() => {
-    try {
-      return JSON.parse(localStorage.getItem(`fitlog_calorie_intel_${activeUser.username}`));
-    } catch { return null; }
-  })();
+  useEffect(() => {
+    calorieIntelApi.get()
+      .then((data) => {
+        if (data && (data.age || data.height_cm)) {
+          setSavedInputs({
+            weightKg:      data.weight_kg,
+            heightCm:      data.height_cm,
+            age:           data.age,
+            activityLevel: data.activity_level,
+            goalWeightKg:  data.goal_weight_kg,
+            gender:        data.gender,
+          });
+        }
+      })
+      .catch(() => {});
+  }, [activeUser.username]);
 
   const w    = Number(savedInputs?.weightKg  ?? profile.weightKg)  || null;
   const h    = Number(savedInputs?.heightCm  ?? profile.heightCm)  || null;

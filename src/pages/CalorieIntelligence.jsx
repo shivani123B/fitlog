@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { calorieIntel as calorieIntelApi } from "../utils/api";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -130,16 +131,7 @@ const labelSt = {
 export default function CalorieIntelligence({ logs, activeUser, onUpdateUser, workouts = {} }) {
   const profile = activeUser.profile || {};
 
-  // Load persisted inputs from localStorage, falling back to profile values
-  function loadInputs() {
-    try {
-      const saved = JSON.parse(
-        localStorage.getItem(`fitlog_calorie_intel_${activeUser.username}`)
-      );
-      if (saved) return saved;
-    } catch { /* ignore */ }
-
-    // First visit — pre-fill from profile
+  function defaultInputs() {
     const g = (profile.gender || "").toLowerCase();
     return {
       age:           String(profile.age      || ""),
@@ -151,16 +143,41 @@ export default function CalorieIntelligence({ logs, activeUser, onUpdateUser, wo
     };
   }
 
-  const [inputs,       setInputs]       = useState(loadInputs);
+  const [inputs,       setInputs]       = useState(defaultInputs);
   const [profileSaved, setProfileSaved] = useState(false);
+  const saveTimer = useRef(null);
 
-  // Auto-save inputs to localStorage whenever they change
   useEffect(() => {
-    localStorage.setItem(
-      `fitlog_calorie_intel_${activeUser.username}`,
-      JSON.stringify(inputs)
-    );
-  }, [inputs, activeUser.username]);
+    calorieIntelApi.get().then((data) => {
+      if (data && (data.age || data.height_cm || data.weight_kg)) {
+        setInputs({
+          age:           String(data.age ?? ""),
+          gender:        data.gender ?? "",
+          heightCm:      String(data.height_cm ?? ""),
+          weightKg:      String(data.weight_kg ?? ""),
+          activityLevel: String(data.activity_level ?? "1.55"),
+          goalWeightKg:  String(data.goal_weight_kg ?? ""),
+        });
+      }
+    }).catch(() => {});
+  }, [activeUser.username]);
+
+  useEffect(() => {
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      const body = {};
+      if (inputs.age)           body.age            = Number(inputs.age);
+      if (inputs.gender)        body.gender          = inputs.gender;
+      if (inputs.heightCm)      body.height_cm       = Number(inputs.heightCm);
+      if (inputs.weightKg)      body.weight_kg       = Number(inputs.weightKg);
+      if (inputs.activityLevel) body.activity_level   = Number(inputs.activityLevel);
+      if (inputs.goalWeightKg)  body.goal_weight_kg   = Number(inputs.goalWeightKg);
+      if (Object.keys(body).length > 0) {
+        calorieIntelApi.update(body).catch(() => {});
+      }
+    }, 800);
+    return () => clearTimeout(saveTimer.current);
+  }, [inputs]);
 
   function handleChange(e) {
     setInputs((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -222,7 +239,7 @@ export default function CalorieIntelligence({ logs, activeUser, onUpdateUser, wo
       <div className="card">
         <h2 className="card-title">Your Metrics</h2>
         <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 18 }}>
-          Pre-filled from your profile. Changes auto-save to this browser.
+          Pre-filled from your profile. Changes auto-save to your account.
         </p>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 16 }}>

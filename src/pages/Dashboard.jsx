@@ -1,9 +1,10 @@
+import { useState, useEffect } from "react";
 import WeightChart        from "../components/WeightChart";
 import SummaryCards       from "../components/SummaryCards";
 import WeightProgressRing from "../components/WeightProgressRing";
 import FitnessBackground  from "../components/FitnessBackground";
+import { calorieIntel as calorieIntelApi } from "../utils/api";
 
-// Consecutive days ending at the most-recent log entry.
 function computeStreak(logs) {
   if (logs.length === 0) return 0;
   const sorted  = [...logs].sort((a, b) => b.date.localeCompare(a.date));
@@ -27,24 +28,27 @@ function weeklyAvgCal(logs) {
   return Math.round(last7.reduce((s, l) => s + l.calories, 0) / last7.length);
 }
 
-// Read TDEE data from CalorieIntelligence localStorage cache
-function loadTDEE(username) {
-  try {
-    const s = JSON.parse(localStorage.getItem(`fitlog_calorie_intel_${username}`));
-    if (!s) return null;
-    const w = Number(s.weightKg) || null;
-    const h = Number(s.heightCm) || null;
-    const a = Number(s.age)      || null;
-    const g = s.gender;
-    const m = Number(s.activityLevel) || 1.55;
-    if (!w || !h || !a || !g) return null;
-    const base = 10 * w + 6.25 * h - 5 * a;
-    const bmr  = g === "female" ? base - 161 : base + 5;
-    return Math.round(bmr * m);
-  } catch { return null; }
+function calcTDEE(data) {
+  if (!data) return null;
+  const w = Number(data.weight_kg) || null;
+  const h = Number(data.height_cm) || null;
+  const a = Number(data.age)       || null;
+  const g = data.gender;
+  const m = Number(data.activity_level) || 1.55;
+  if (!w || !h || !a || !g) return null;
+  const base = 10 * w + 6.25 * h - 5 * a;
+  const bmr  = g === "female" ? base - 161 : base + 5;
+  return Math.round(bmr * m);
 }
 
 export default function Dashboard({ logs, activeUser, workouts = {} }) {
+  const [tdeeTarget, setTdeeTarget] = useState(null);
+
+  useEffect(() => {
+    calorieIntelApi.get()
+      .then((data) => setTdeeTarget(calcTDEE(data)))
+      .catch(() => {});
+  }, [activeUser.username]);
   const sortedDesc   = [...logs].sort((a, b) => b.date.localeCompare(a.date));
   const sortedAsc    = [...logs].sort((a, b) => a.date.localeCompare(b.date));
 
@@ -63,7 +67,6 @@ export default function Dashboard({ logs, activeUser, workouts = {} }) {
   const todayLog     = logs.find((l) => l.date === today) || null;
   const todayIntake  = todayLog?.calories ?? null;
   const todayBurn    = (workouts[today] || []).reduce((s, e) => s + (e.caloriesBurned || 0), 0);
-  const tdeeTarget   = loadTDEE(activeUser.username);
 
   // Workout streak (consecutive days with workouts)
   const workoutStreak = (() => {
